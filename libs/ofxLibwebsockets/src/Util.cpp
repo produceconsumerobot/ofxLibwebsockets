@@ -1,4 +1,5 @@
 #include "ofxLibwebsockets/Util.h"
+#include "QuickTimer.h"
 
 namespace ofxLibwebsockets {
 

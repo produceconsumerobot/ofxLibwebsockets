@@ -6,6 +6,8 @@
 //
 
 #include "ofxLibwebsockets/Reactor.h"
+#include "QuickTimer.h"
+#include "MESGScratch.h"
 
 namespace ofxLibwebsockets { 
 
@@ -112,8 +114,9 @@ namespace ofxLibwebsockets {
     unsigned int Reactor::_notify(Connection* conn,
                                 enum libwebsocket_callback_reasons const reason,
                                 const char* const _message,
-                                const unsigned int len){
-        
+                                const unsigned int len)
+	{
+		//TIMER_PIN_TIME();
         // this happens with events that don't use the connection
         // so not always a problem
         if (conn == NULL || conn->protocol == NULL || conn->ws == NULL ){
@@ -191,7 +194,6 @@ namespace ofxLibwebsockets {
             case LWS_CALLBACK_CLIENT_RECEIVE:       // client receive
             case LWS_CALLBACK_CLIENT_RECEIVE_PONG:
                 {
-                    
                     bool bFinishedReceiving = false;
                     
                     // decide if this is part of a larger message or not
@@ -200,7 +202,7 @@ namespace ofxLibwebsockets {
                     if ( !bReceivingLargeMessage && (bytesLeft > 0 || !libwebsocket_is_final_fragment( conn->ws )) ){
                         bReceivingLargeMessage = true;
                     }
-                    
+
                     // text or binary?
                     int isBinary = lws_frame_is_binary(conn->ws);
                     
@@ -249,7 +251,7 @@ namespace ofxLibwebsockets {
                                 largeMessage = "";
                             }
                         }
-                        
+
                         if (_message != NULL && len > 0 && (!bReceivingLargeMessage || bFinishedReceiving) ){
                             args.json = Json::Value( Json::nullValue );
                             
@@ -261,11 +263,59 @@ namespace ofxLibwebsockets {
                             }
                         }
                     }
-                    
+
                     // only notify if we have a complete message
-                    if (!bReceivingLargeMessage || bFinishedReceiving){
-                        ofNotifyEvent(conn->protocol->onmessageEvent, args);
+                    if (!bReceivingLargeMessage || bFinishedReceiving)
+					{
+						string msgMethod = args.json["method"].asString();
+
+						cout << "got message: " << msgMethod << "\n";
+						if( msgMethod.compare("touchingPhysicalColor") == 0 ) 
+						{
+							cout << "  is reality message!" << "\n";
+							//TIMER_SET_TO_PIN();
+
+							/* Uncomment to short circuit return
+							Json::Value returnMsg;
+							returnMsg["id"] = returnMsg.null;
+							returnMsg["jsonrpc"] = "2.0";
+							returnMsg["id"] = args.json["id"].asInt();
+							returnMsg["result"] = false;
+							cout << "short circuiting a false return immediately" << "\n";
+
+							int maxTries = 200;
+							int tryCounter = 0;
+							// Send outgoing websocket messages
+							Json::FastWriter jsonWriter;
+
+							tryCounter++;
+							if (tryCounter > maxTries) {
+								cout << endl << "MAX SEND TRIES EXCEEDED, BREAKING" << endl;
+								break;
+							}
+							try {
+								if (args.conn.isIdle()) {
+									Json::FastWriter jsonWriter;
+									string msg = jsonWriter.write(returnMsg);
+									args.conn.send(msg);
+								}
+								else {
+									cout << "-";
+								}
+							}
+							catch (exception e) {
+								int somethingBad = 1;
+							}
+
+							cout << "short circuit complete!\n";
+							TIMER_CHECKPOINT("complete short circuit");
+							return 0; */
+						}
+
+						ofNotifyEvent(conn->protocol->onmessageEvent, args);
                     }
+
+					TIMER_CHECKPOINT("message processing complete");
                 }
                 break;
                 

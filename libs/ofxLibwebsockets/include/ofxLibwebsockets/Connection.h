@@ -40,6 +40,7 @@ namespace ofxLibwebsockets {
         
         void close();
         void send(const std::string& message);
+        void sendFirst(const std::string& message);
         
         template <class T> 
         void sendBinary( T& image ){
@@ -86,6 +87,7 @@ namespace ofxLibwebsockets {
         //std::vector<unsigned char> buf;
         
         // threading stuff
+		std::mutex messages_text_mutex;
         std::deque<TextPacket> messages_text;
         std::deque<BinaryPacket> messages_binary;
         

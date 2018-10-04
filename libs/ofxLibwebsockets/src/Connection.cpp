@@ -78,9 +78,27 @@ namespace ofxLibwebsockets {
         TextPacket tp;
         tp.index = 0;
         tp.message = message;
+
+		std::unique_lock<std::mutex> lock{messages_text_mutex};
         messages_text.push_back(tp);
     }
     
+    //--------------------------------------------------------------
+    void Connection::sendFirst(const std::string& message)
+    {
+        if ( ws == NULL) return;
+        if ( message.size() == 0 ) return;
+        int n = 0;
+        
+        // changed 3/6/15: buffer all messages to prevent threading errors
+        TextPacket tp;
+        tp.index = 0;
+        tp.message = message;
+
+		std::unique_lock<std::mutex> lock{messages_text_mutex};
+		messages_text.insert(messages_text.begin(),tp);
+    }
+
     //--------------------------------------------------------------
     void Connection::sendBinary( ofBuffer & buffer ){
         sendBinary(buffer.getData(), buffer.size());
@@ -116,41 +134,46 @@ namespace ofxLibwebsockets {
         // process standard ws messages
         if ( messages_text.size() > 0 && idle ){
             // grab first packet
-            TextPacket & packet = messages_text[0];
+
+			std::unique_lock<std::mutex> lock{messages_text_mutex};
+			if( messages_text.size() > 0 )
+			{
+				TextPacket & packet = messages_text[0];
             
-            // either send a part of the message or just the message itself
-            int dataSize = bufferSize > packet.message.size() ? packet.message.size() : bufferSize;
+				// either send a part of the message or just the message itself
+				int dataSize = bufferSize > packet.message.size() ? packet.message.size() : bufferSize;
             
-            // if "start" set 'write text'; otherwise we're sending a continuation
-            int writeMode = packet.index == 0 ? LWS_WRITE_TEXT : LWS_WRITE_CONTINUATION;
+				// if "start" set 'write text'; otherwise we're sending a continuation
+				int writeMode = packet.index == 0 ? LWS_WRITE_TEXT : LWS_WRITE_CONTINUATION;
             
-            bool bDone = false;
+				bool bDone = false;
             
-            // are we going to write the whole packet here?
-            if ( packet.index + dataSize >= packet.message.size() ){
-                dataSize = packet.message.size() - packet.index;
-                bDone = true;
-            } else {
-                writeMode |= LWS_WRITE_NO_FIN; // add "we're not finished" flag
-            }
+				// are we going to write the whole packet here?
+				if ( packet.index + dataSize >= packet.message.size() ){
+					dataSize = packet.message.size() - packet.index;
+					bDone = true;
+				} else {
+					writeMode |= LWS_WRITE_NO_FIN; // add "we're not finished" flag
+				}
             
-            // actual write to libwebsockets
-            memcpy(&buf[LWS_SEND_BUFFER_PRE_PADDING], packet.message.c_str() + packet.index, dataSize );
-            idle = false;
+				// actual write to libwebsockets
+				memcpy(&buf[LWS_SEND_BUFFER_PRE_PADDING], packet.message.c_str() + packet.index, dataSize );
+				idle = false;
             
-            int n = libwebsocket_write(ws, &buf[LWS_SEND_BUFFER_PRE_PADDING], dataSize, (libwebsocket_write_protocol) writeMode );
+				int n = libwebsocket_write(ws, &buf[LWS_SEND_BUFFER_PRE_PADDING], dataSize, (libwebsocket_write_protocol) writeMode );
             
-            if ( n < -1 ){
-                ofLogError()<<"[ofxLibwebsockets] ERROR writing to socket";
-            }
+				if ( n < -1 ){
+					ofLogError()<<"[ofxLibwebsockets] ERROR writing to socket";
+				}
             
-            libwebsocket_callback_on_writable(context, ws);
-            packet.index += dataSize;
+				libwebsocket_callback_on_writable(context, ws);
+				packet.index += dataSize;
             
-            // packet sent completed, erase front of dequeue
-            if ( bDone ){
-                messages_text.pop_front();
-            }
+				// packet sent completed, erase front of dequeue
+				if ( bDone ){
+					messages_text.pop_front();
+				}
+			}
             
         } else if ( messages_text.size() > 0 && messages_text[0].index ){
             libwebsocket_callback_on_writable(context, ws);
@@ -185,7 +208,8 @@ namespace ofxLibwebsockets {
                     ofLogError()<<"[ofxLibwebsockets] ERROR writing to socket";
                 }
                 
-                if ( bDone ){
+                if ( bDone )
+				{
                     free(packet.data);
                     messages_binary.pop_front();
                 }
