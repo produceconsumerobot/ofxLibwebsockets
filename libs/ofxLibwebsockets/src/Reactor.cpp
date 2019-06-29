@@ -269,10 +269,10 @@ namespace ofxLibwebsockets {
 					{
 						string msgMethod = args.json["method"].asString();
 
-						cout << "got message: " << msgMethod << "\n";
+						//cout << "got message: " << msgMethod << "\n";
 						if( msgMethod.compare("touchingPhysicalColor") == 0 ) 
 						{
-							cout << "  is reality message!" << "\n";
+							//cout << "  is reality message!" << "\n";
 							//TIMER_SET_TO_PIN();
 
 							/* Uncomment to short circuit return
